@@ -72,8 +72,27 @@
     如果我们用词向量的余弦相似度来衡量两个词的相关性，越接近1或者-1表示两个词语义越相近或者相反，
     越接近0表示语义约不相关。例如“漂亮”和“美丽”是一对近义词，它们的余弦相似度应该接近于1；
     “美丽”和“丑陋”是一对反义词，它们的余弦相似度应该接近于-1；而“美丽”和“手机”在语义上的关系较弱，
-    其的余弦相似度应该接近于0。
+    其余弦相似度则应该接近于0。
 \end{enumerate}
+
+
+\paragraph{Word2Vec}
+
+Word2Vec即word to vector，顾名思义就是将词转换为向量。该方法由\parencite{mikolov2013efficient}首创，
+主要有以下特点：
+\begin{enumerate}
+    \item \textbf{算法效率高}：可以在百万数量级的词典和上亿规模的数据上训练；
+    \item \textbf{可以表征语义相似度}：得到的词向量可以较好地反应词间的语义关系。
+\end{enumerate}
+
+Word2Vec提出了两种基本模型：CBOW(连续词袋模型)和Skip-Gram（跳词模型），来构建单词的高细粒度的向量表示。
+
+\subparagraph{CBOW}
+CBOW即Continuous Bag-Of-Words，是通过一个词的上下文来预测这个词的语义。
+
+
+\subparagraph{Skip-Gram}
+Skip-Gram是通过一个词语来预测上下文的词语，其思路正好与CBOW相反。
 
 
 使用预训练的词嵌入已经成为包括NER在内的NLP任务的标准特征。\parencite{collobert2011natural}提出了一种构建词嵌入的神经网络体系结构，
@@ -86,8 +105,6 @@
 CBOW和连续Skip-gram都是对数线性语言模型，但它们在基本种类上有所不同。CBOW根据上下文预测目标词。
 然而，连续Skip-gram模型预测给定窗口内目标词前后的单词。用作向量表示上下文的相邻单词窗口是一个需要优化的超参数。
 增加窗口增加了语言模型的准确性，但也增加了考虑窗口中较远单词的计算复杂性。
-
-
 
 \subsection{字符嵌入(Character Embedding)}
 
