@@ -86,25 +86,88 @@ Word2Vec即word to vector，顾名思义就是将词转换为向量。该方法�
 \end{enumerate}
 
 Word2Vec提出了两种基本模型：CBOW(连续词袋模型)和Skip-Gram（跳词模型），来构建单词的高细粒度的向量表示。
+CBOW和连续Skip-gram都是对数线性语言模型。
 
 \subparagraph{CBOW}
 CBOW即Continuous Bag-Of-Words，是通过一个词的上下文来预测这个词的语义。
+例如\parencite{zhang2021dive}，在文本序列“the”“man”“loves”“his”“son”中，在“loves”为中心词且上下文窗口为2的情况下，
+连续词袋模型考虑基于上下文词“the”“man”“him”“son”生成中心词“loves”的条件概率，即：
+
+\begin{equation}
+    P("loves"|"the", "man", "his", "son")
+\end{equation}
+
+由于连续词袋模型中存在多个上下文词，因此在计算条件概率时对这些上下文词向量进行平均。
+具体地说，对于字典中索引$i$的任意词，分别用$v_i \in \mathbb{R}^d$和$u_i \in \mathbb{R}^d$表示用作\textbf{上下文词}和\textbf{中心词}的两个向量。
+给定上下文词$w_{o_1}, \cdots, w_{o_{2m}}$（在词表中索引是$o_1, \cdots, o_{2m}$）
+生成任意中心词$w_c$（在词表中索引是$c$）的条件概率可以由以下公式建模：
+
+\begin{equation}\label{eq_CBOW}
+    P(w_c|w_{o_1}, \cdots, w_{o_{2m}})
+    = \frac{exp \left(u^T_c(v_{o1} + \cdots + v_{o_{2m}}) / 2m \right)}
+    {\sum_{i \in \mathcal{V}} exp \left( u^T_i(v_{o1} + \cdots + v_{o_{2m}}) / 2m \right)}
+\end{equation}
+
+其中词表索引集$\mathcal{V} = \{0, 1, \cdots, |\mathcal{V} - 1|\}$。
+为简洁起见，我们设$\mathcal{W} = \{w_{o_1}, \cdots, w_{o_{2m}}\}$和$\overline{v}_o = (v_{o1} + \cdots + v_{o_{2m}}) / 2m $，
+则\ref{eq_CBOW}可以简化为：
+\begin{equation}
+    P(w_c|\mathcal{W})
+    = \frac{exp \left(u^T_c \overline{v}_o \right)}
+    {\sum_{i \in \mathcal{V}} exp \left( u^T_i \overline{v}_o \right)}
+\end{equation}
+
+给定长度为$T$的文本序列，其中时间步t处的词表示为$w^{(t)}$。对于上下文窗口$m$，
+连续词袋模型的似然函数是在给定其上下文词的情况下生成所有中心词的概率：
+
+\begin{equation}
+    \prod_{t=1}^{T} P(w^{(t)}|w^{(t-m)}, \cdots, w^{(t-1)}, w^{(t)+1}, \cdots, w^{(t+m)})
+\end{equation}
 
 
 \subparagraph{Skip-Gram}
-Skip-Gram是通过一个词语来预测上下文的词语，其思路正好与CBOW相反。
+Skip-Gram（跳元模型）是通过一个词语来预测上下文的词语，其思路正好与CBOW相反。
+以文本序列“the”“man”“loves”“his”“son”为例。假设中心词选择“loves”，
+并将上下文窗口设置为2，给定中心词“loves”，跳元模型考虑生成上下文词“the”“man”“him”“son”的条件概率：
+
+\begin{equation}
+    P("the", "man", "his", "son"|"loves")
+\end{equation}
+
+在跳元模型中，每个词都有两个$d$维向量表示，用于计算条件概率。对于词典中索引为$i$的任何词，
+分别用$v_i \in \mathbb{R}^d$和$u_i \in \mathbb{R}^d$表示用作\textbf{中心词}和\textbf{上下文词}的两个向量。
+给定中心词$w_c$（在词表中索引是$c$），生成任意上下文词$w_{o_1}, \cdots, w_{o_{2m}}$
+（在词表中索引是$o_1, \cdots, o_{2m}$）的条件概率可以由以下公式建模：
+
+\begin{equation}
+    P(w_o|w_c)
+    = \frac{exp\left(u^T_o v_c \right)}
+    {\sum_{i \in \mathcal{V}} exp\left( u^T_i v_c \right)}
+\end{equation}
+
+$\mathcal{V}$的定义与CBOW模型一致。给定长度为T的文本序列，其中时间步t处的词表示为$w^{(t)}$。
+假设上下文词是在给定任何中心词的情况下独立生成的。对于上下文窗口m，跳元模型的似然函数是在给定
+任何中心词的情况下生成所有上下文词的概率：
+
+\begin{equation}
+    \prod_{t=1}^{T} \prod_{-m \leq j \leq m, j \neq 0} P(w^{(t+j)} | w^{(t)})
+\end{equation}
 
 
-使用预训练的词嵌入已经成为包括NER在内的NLP任务的标准特征。\parencite{collobert2011natural}提出了一种构建词嵌入的神经网络体系结构，
-该体系结构构成了获取词向量表示的主要方法，用于训练NER的深度学习NLP模型。
-词嵌入是由\parencite{mikolov2013efficient}首创的，他引入了连续词袋和Skip-gram模型来构建单词的高细粒度的向量表示。
-\parencite{pennington2014glove}的Glove是另一种著名的基于词共现的词嵌入方法。通过将矩阵归一化和平滑后的重构损耗最小化，
-将频率矩阵分解到较低的维数。[13]创建单词嵌入的方法被广泛采用，因为这种向量表示显示了组合性。
-构成性与线性语义推理脑电信号的性质相对应，例如'Paris' - 'France' + 'Italy' = 'Rome'。
 
-CBOW和连续Skip-gram都是对数线性语言模型，但它们在基本种类上有所不同。CBOW根据上下文预测目标词。
-然而，连续Skip-gram模型预测给定窗口内目标词前后的单词。用作向量表示上下文的相邻单词窗口是一个需要优化的超参数。
-增加窗口增加了语言模型的准确性，但也增加了考虑窗口中较远单词的计算复杂性。
+\paragraph{GloVe}
+
+\parencite{pennington2014glove}的GloVe(Global Vectors for Word Representation，全局词向量表示)
+是另一种著名的基于词共现的词嵌入方法。该方法的优点是可以给予全局词汇共现统计信息学习词向量。
+
+GloVe和Word2Vec都可以根据词语的上下文得到词向量，但是原理不同。
+Word2Vec是通过上下文词预测一个单词，或根据一个词预测上下文词；GloVe则是通过“共现矩阵“计算词向量。
+
+
+% 通过将矩阵归一化和平滑后的重构损耗最小化，将频率矩阵分解到较低的维数。
+% [13]创建单词嵌入的方法被广泛采用，因为这种向量表示显示了组合性。
+% 构成性与线性语义推理脑电信号的性质相对应，例如'Paris' - 'France' + 'Italy' = 'Rome'。
+
 
 \subsection{字符嵌入(Character Embedding)}
 
@@ -120,8 +183,11 @@ CBOW和连续Skip-gram都是对数线性语言模型，但它们在基本种类�
 \parencite{chen2015joint}表明，在中文的词嵌入中引入字符嵌入会催生更有信息的词表示，例如在单词关联性和类比推理任务中有更好的结果。
 
 
-\section{Embedding矩阵的维度选择}
-
-
 \section{命名实体识别方案}
 
+在对文本数据进行适当的预处理和字符级嵌入的基础上，将双向长短期记忆网络（BiLSTM）
+和具有全局自注意层（Self-attention Layer）的门控递归单元（GRU）进行结合，
+探究模型的性能。在此基础上，进行多种网络结构的组合，利用实际数据集对比探究模型优劣。
+
+
+% \section{Embedding矩阵的维度选择}
