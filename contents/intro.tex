@@ -69,24 +69,95 @@ NER任务通常包括两部分：（1）实体边界识别；（2）确定实体
 
 \subsubsection{卷积神经网络}
 
-卷积神经网络（CNN）可以使用反向传播学习丛单词中提取特征向量表示。因此，在从可变长度的输入序列中提取高阶特征时，
-CNN似乎是自然选择。有两种方法:(1)窗口法和(2)(卷积)句法。窗口方法假设分配给单个单词的标签取决于它的上下文
-(即出现在给定单词之前或之后的单词)，该方法更适合于像NER这样的序列标记任务。
+卷积神经网络（CNN）可以使用反向传播学习丛单词中提取特征向量表示。使用CNN进行句子建模可以追溯到\parencite{collobert2008unified}。
+该工作使用多任务学习来输出对NLP任务的多个预测，如POS标记、块、命名实体标记、语义角色、
+语义相似词和一个语言模型。使用一个查找表将每个单词转换为用户定义的维度向量。
+因此，通过对每个单词应用查找表，n个单词的输入序列$s_1,s_2,\cdots, s_n$
+被转换为一系列向量$ws_1,ws_2, \cdots, ws_n$。
+这可以看作是一种原始词嵌入方法，其权值是在网络训练中习得的。
+在\parencite{collobert2011natural}中，Collobert扩展了他们的工作，
+提出了一个通用的基于CNN的框架来解决过多的NLP任务。
+
+我们定义一个有限词表$\mathcal{D}$，对于词表中的每个单词$w\in \mathcal{D}$，一个$d_{wrd}$维特征向量
+表示由查找表层$LT_W(·)$给出：
+\begin{equation}
+	LT_W(w) = \langle W\rangle _w^1
+\end{equation}
+
+其中$W \in \mathbb{R} ^{d_{wrd} \times |\mathcal{D}|}$是要学习的参数矩阵，
+$\langle W\rangle _w^1 \in \mathbb{R} ^{d_{wrd}}$是第$W$的第$w$列，$d_{wrd}$词向量大小（用户选择的超参数）。
+给定一个由$\mathcal{D}$内的T个词$[w]_1^T$组成的句子序列，
+查找表层对序列中的每个单词应用相同的操作，产生以下输出矩阵：
+
+\begin{equation}\label{eq1}
+	LT_W([w]_1^T) = \left(\langle W\rangle _{[w]_1}^1, \langle W\rangle _{[w]_2}^1, \cdots, \langle W\rangle _{[w]_T}^1 \right)
+\end{equation}
+
+该矩阵则可以被填入后续的神经网络层中。
+另外，我们可以考虑将词表示成K个离散特征$w \in \mathcal{D}^1 \times \cdots \times \mathcal{D}^k$，
+其中$\mathcal{D}_k$是第$k$个特征的词典。利用参数$W^k \in \mathbb{R} ^{d^k_{wrd} \times |\mathcal{D}^k|}$
+将查找表$LT_W(·)$与每个特征关联，其中$d^k_{wrd}\in \mathbb{N}$是一个用户指定的向量维度。
+给定一个单词$w$，$d_{wrd}=\sum_k d^k_{wrd}$维的特征向量可以通过链接所有查找表的输出获得。
 
 \begin{equation}
-	f^{l}_{\theta}
-	= \langle LT_W( [ w ] ^T_l) \rangle ^{d_{win}}_t
+	LT_{W^1, \cdots, W^K}([w]^T_1)
 	= \left(
-			\begin{array}{c}
-			\langle W \rangle ^l_{[w]_{t - d_{win} / 2}} \\
-			\vdots \\
-			\langle W \rangle ^l_{[w]_t} \\
-			\vdots \\
-			\langle W \rangle ^l_{[w]_{t + d_{win} / 2}}
-		\end{array} 
+		\begin{matrix}
+			\langle W^1 \rangle _{[w_1]_1}^1 & \cdots & \langle W^1 \rangle _{[w_1]_T}^1 \\
+			\vdots &  & \vdots \\
+			\langle W^K \rangle _{[w_K]_1}^1 & \cdots & \langle W^K \rangle _{[w_K]_T}^1 
+		\end{matrix}
 	\right)
 \end{equation}
 
+单词序列$[w]_1^T$的查找表层的矩阵输出类似于\ref{eq1}，但为每个离散特征都加入了额外的行。
+
+\begin{equation}\label{eq2}
+	LT_{W^1, \cdots, W^K}(w) = 
+		\left(\begin{matrix}
+			LT_{W^1}(w_1) \\
+			\vdots \\
+			LT_{W^K}(w_K)
+		\end{matrix}\right) =
+		\left(\begin{matrix}
+			\langle W^1\rangle _{w_1}^1 \\
+			\vdots \\
+			\langle W^K\rangle _{w_K}^1
+		\end{matrix}\right)
+	\end{equation}
+
+查找表中的这些向量特征可以有效地学习字典中单词的特征。
+现在，我们想使用这些可训练特征作为输入到可训练特征提取器的其他层，这些层可以表示单词组，然后是句子。
+
+查找表层产生的特征向量需要在神经网络的后续层中进行组合，以产生句子中每个单词的标记决策。
+在可变长度序列中为每个元素生成标签（这里，句子是单词序列）是机器学习中的一个标准问题。
+考虑两种常用的方法来标记一个单词：窗口方法和（卷积）句子方法。
+
+\paragraph{窗口法}
+
+窗口方法假设分配给单个单词的标签取决于它的上下文(即出现在给定单词之前或之后的单词)，
+给定要标记的单词，我们考虑这个单词周围的单词的固定大小$k_{sz}$（一个超参数）窗口。
+窗口中的每个单词首先通过查找表层\ref{eq1}或者\ref{eq2}生成固定大小$d_{wrd}\times k_{sz}$的词特征矩阵。
+该矩阵在将每一列向量拼接后可以视为一个$d_{wrd} k_{sz}$维向量，进而被传到后续的神经网络层中。
+第一层网络给出的单词特征窗口可以写为：
+
+\begin{equation}
+	f^{1}_{\theta}
+	= \langle LT_W( [ w ] ^T_1) \rangle ^{d_{win}}_t
+	= \left(
+			\begin{matrix}{c}
+			\langle W \rangle ^1_{[w]_{t - d_{win} / 2}} \\
+			\vdots \\
+			\langle W \rangle ^1_{[w]_t} \\
+			\vdots \\
+			\langle W \rangle ^1_{[w]_{t + d_{win} / 2}}
+		\end{matrix}
+	\right)
+\end{equation}
+
+\subparagraph{线性层}
+
+固定大小的向量$f^{l}_{\theta}$可以穿到一个或多个标准神经网络层中，然后对这些层的输入执行仿射变换：
 
 \begin{equation}
 	f^{l}_{\theta} 
@@ -95,16 +166,18 @@ CNN似乎是自然选择。有两种方法:(1)窗口法和(2)(卷积)句法。�
 
 这里的$W^l \in R^{ n^l_h \times n^{l - 1}_h}$和$b^l \in R^{n^l_h}$是使用反向传播训练的，
 $n^l_h$是一个超参数，表示该层中隐藏单元的数量。固定大小的矢量输入可以通过如上所示的多个线性变换层进行传递。
-为了从输入序列中捕获高阶特征，存在“硬”双曲正切函数层。“硬”双曲正切在防止过拟合的同时，与精确双曲正切函数相比，
-计算效率更高。窗口特性的一个警告是，句首和句尾单词的上下文没有明确定义。因此，在输入句子的开头和结尾都有相当于
-窗口一半大小的填充词，类似于序列模型中的开始和停止指示器。
 
+\subparagraph{硬双曲正切函数层}
+
+为了从输入序列中捕获高阶特征，存在“硬”双曲正切函数层。“硬”双曲正切在防止过拟合的同时，与精确双曲正切函数相比，
+计算效率更高。对相应的$l$层的输入向量应用硬双曲正切函数：
 
 \begin{equation}
 	[f^{l}_{\theta}]_i 
-	= Hard tanh([f^{l - 1}_{\theta}]_i)
+	= Hard tanh(\left[f^{l - 1}_{\theta}\right]_i)
 \end{equation}
 
+其中：
 
 \begin{equation}
 	Hard tanh(x)
@@ -116,19 +189,19 @@ $n^l_h$是一个超参数，表示该层中隐藏单元的数量。固定大小�
 \end{equation}
 
 
-使用CNN进行句子建模可以追溯到\parencite{collobert2008unified}。该工作使用多任务学习来输出对NLP任务的多个预测，
-如POS标记、块、命名实体标记、语义角色、语义相似词和一个语言模型。使用一个查找表将每个单词转换为用户定义的维度向量。
-因此，通过对每个单词应用查找表，n个单词的输入序列$s_1,s_2,\cdots, s_n$被转换为一系列向量$ws_1,ws_2, \cdots, ws_n$。
+% \paragraph{句法}
 
+% 窗口方法在我们感兴趣的大多数自然语言处理任务中都表现良好，但却无法在SRL（Semantic Role Labelling，语义角色标注）任务中
+% 有好的表现，其中的单词标记取决于句子中预先选择的动词。如果动词落在窗口之外，这个词就无法被正确标记。
+% 在这种情况下，标记一个单词则需要考虑整个句子。当时用
 
-这可以看作是一种原始词嵌入方法，其权值是在网络训练中习得的。在\parencite{collobert2011natural}中，Collobert扩展了他们的工作，
-提出了一个通用的基于CNN的框架来解决过多的NLP任务。这两篇文章使得CNN在自然语言处理研究人员中得到了广泛普及。
+\parencite{collobert2008unified}和\parencite{collobert2011natural}这两篇文章使得CNN在自然语言处理研究人员中得到了广泛普及。
 鉴于CNN在计算机视觉任务上已经展现出了它们的实力，人们更容易相信它们的表现。
 CNN能够从输入句子中提取显著的N-gram特征，为下游任务创建句子的信息潜在语义表示。
-这样的应用是由\parencite{collobert2011natural, kim2016character, kalchbrenner2014convolutional}初创的，这催生了后续文献中以CNN为基础的网络的大量扩散。
+这样的应用是由\parencite{collobert2011natural, kim2016character, kalchbrenner2014convolutional}初创的，
+这催生了后续文献中以CNN为基础的网络的大量扩散。
 
 \subsubsection{循环神经网络}
-
 
 循环神经网络是深度神经网络体系结构的另一种形式。一般来说，CNN被用来表示位置不变的函数(如词袋)，
 而RNN则表示顺序的体系结构(如句子、段落等)。很明显，相对于分层CNN, RNN更适合于像NER这样的序列建模任务。
@@ -149,7 +222,6 @@ $g_{\theta, l}$是在以$[f^t_{\theta, l}]_i$为输入层上的一个非线性�
 $x^t_l$是在$t$时刻和通过训练得到的权重$W^l \in R^{d_{s^{t}_{\theta, l}} \times d_{x^t_l}}$上输入序列的第$i$个单元(单词，句子等)。
 简单RNN中的隐藏状态可以看作是它的记忆分量。然而，简单RNN存在梯度消失的问题，这使得反向传播很难学习到之前的权值。
 因此，简单RNN增加了门控机制来克服收敛问题。具有门控机制的RNN变体在神经网络中最受欢迎的是长短期记忆网络(LSTM)和门控循环单元(GRUs)。
-
 
 \paragraph{长短期记忆网络}
 
@@ -179,7 +251,6 @@ LSTM有三个门：输入门$i_t$、遗忘门$f_t$和输出门$o_t$，它们是$
 \paragraph{门控循环单元}
 
 与LSTM相比，门控循环单元[57]是一种较新的、较不复杂的RNN变体。
-
 GRU与LSTM相似，因为它可以调节错误流，从而避免梯度消失\parencite{bengio1994learning}。然而，GRU与LSTM有许多关键的区别。
 GRN不像LSTM那样有独立的存储单元。因此，GRN缺乏对内存内容(即LSTM的输出门)的受控外显。
 与LSTM不同，GRN在没有任何控制的情况下公开完整的内容。此外，GRN控制着从前一个激活状态到当前候选激活状态的信息流。
@@ -196,8 +267,30 @@ GRN不像LSTM那样有独立的存储单元。因此，GRN缺乏对内存内容(
 $h^j_t$是GRU在时刻$t$时第$j$级的激活状态。$\overline{h}^j_t$是GRU在时刻$t$时第$j$级的候选激活状态\parencite{bahdanau2014neural}。
 更新门$z^j_t$决定了单元更新其激活状态的程度。重置门$r^j_t$的计算方法与更新门类似。
 
+\section{论文问题来源及创新点}
 
-\section{论文组织结构}
+
+\parencite{zhu2019can}中，作者提出了一种基于CNN和注意力机制的卷积注意力网络(CAN)，该网络由一个基于带有局部自注意层的CNN和
+一个基于全局自注意层的GRU组成来捕捉字符的上下文以及句子中的信息。但该网络使用CNN的窗口法虽然有主意处理序列输入，
+但是无法对上下文的长距离依赖进行建模，于是基于此，本文将CNN替换为双向LSTM，LSTM能够对上下文的长距离依赖进行建模。
+
+
+\paragraph{创新点}
+
+\begin{figure}[!htp]
+    \centering
+    \label{fig:network_architecture}
+    \includegraphics[width=10cm]{figures/network_architecture.jpeg}
+    \caption{网络架构图}
+\end{figure}
+
+在对文本数据进行适当的预处理和字符级嵌入的基础上，将双向长短期记忆网络（BiLSTM）
+和具有全局自注意层（Self-attention Layer）的门控递归单元（GRU）进行结合，
+利用BiLSTM快速学习许多时间步后缓慢变化的权值，并将该权值植入GRU的自注意层里，
+提出一种新的中文命名实体识别的网络架构。具体的网络结构如图~\ref{fig:network_architecture}
+
+
+% \section{论文组织结构}
 
 
 % 上海交通大学是我国历史最悠久的高等学府之一，是教育部直属、教育部与上海市共建的全
